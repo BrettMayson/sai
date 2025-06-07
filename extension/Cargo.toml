@@ -1,0 +1,45 @@
+[package]
+name = "sai"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "sai"
+crate-type = ["cdylib"]
+
+[dependencies]
+arma-rs = { version = "1.11.14", features = ["uuid"] }
+openai-api-rs = { git = "https://github.com/brettmayson/openai-api-rs", branch = "main" }
+tokio = "1.44.1"
+dashmap = "6.1.0"
+uuid = { version = "1.16.0", features = ["v4"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+
+# audio
+cpal = "0.15.3"
+hound = "3.5.1"
+rodio = "0.20.1"
+rubato = "0.16.2"
+tts = { version = "0.26.3", optional = true }
+whisper-rs = {version = "0.14.2", optional = true }
+
+# api
+axum = { version = "0.8.3", features = ["json", "multipart"] }
+reqwest = { version = "0.12.15", features = ["json"] }
+
+[features]
+local = ["whisper-rs", "tts"]
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# unwrap_used = "deny"
+cognitive_complexity = "allow"
+# a bit too nursery, lots of false positives
+missing_const_for_fn = "allow"
+
+[lints.rust]
+future_incompatible = "warn"
+nonstandard_style = "warn"

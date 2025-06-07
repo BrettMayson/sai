@@ -1,0 +1,22 @@
+name = "sai"
+prefix = "sai"
+mainprefix = "z"
+author = "Brett"
+
+[files]
+include = [
+    "*.dll",
+    "*.so",
+]
+
+[hemtt.launch.default]
+workshop = [
+    "450814997", # CBA_A3
+    "463939057", # ACE3
+    "1779063631", # Zeus Enhanced
+    "751965892", # ACRE2
+]
+mission = "sai_test.Stratis"
+
+[version]
+git_hash = 0

@@ -1,0 +1,29 @@
+[tasks.build_x64_debug]
+install_crate = false
+command = "cargo"
+args = ["+stable-x86_64-pc-windows-msvc", "build"]
+
+[tasks.build_x64_release]
+install_crate = false
+command = "cargo"
+args = ["+stable-x86_64-pc-windows-msvc", "build", "--release"]
+
+[tasks.move_x64_debug]
+script_runner = "@shell"
+script = '''
+cp ../target/debug/sai.dll ../sai_x64.dll
+'''
+dependencies = ["build_x64_debug"]
+
+[tasks.move_x64_release]
+script_runner = "@shell"
+script = '''
+cp ../target/release/sai.dll ../sai_x64.dll
+'''
+dependencies = ["build_x64_release"]
+
+[tasks.debug]
+dependencies = ["move_x64_debug"]
+
+[tasks.release]
+dependencies = ["move_x64_release"]
