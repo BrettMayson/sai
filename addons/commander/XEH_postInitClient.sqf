@@ -24,7 +24,16 @@ GVAR(radio) = "";
 
 [QGVAR(speak), {
     params ["_func", "_data"];
-    ("sai" callExtension [format["client:speak:%1", _func], [_data]]) params ["_ret", "_code"];
+    private _freq = (keys GVAR(commanders)) select ((keys GVAR(commanders)) findIf {
+        private _x = GVAR(commanders) get _x;
+        _x isEqualTo _data#0
+    });
+    if (([] call acre_api_fnc_getCurrentRadioList) findIf {
+        private _channel = [_x] call acre_api_fnc_getRadioChannel;
+        private _f = [[_x] call acre_api_fnc_getBaseRadio, "default", _channel, "frequencyRX"] call acre_api_fnc_getPresetChannelField;
+        _f isEqualTo _freq
+    } == -1) exitWith {};
+    ("sai" callExtension [format["client:speak:%1", _func], [_data#1]]) params ["_ret", "_code"];
 }] call CBA_fnc_addEventHandler;
 
 addMissionEventHandler ["ExtensionCallback", {

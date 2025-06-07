@@ -17,9 +17,9 @@ addMissionEventHandler ["ExtensionCallback", {
     params ["_name", "_func", "_data"];
     if (_name != "sai") exitWith {};
     if (_func == "speak:local") then {
-        [QGVAR(speak), ["local", _data]] call CBA_fnc_globalEvent;
+        [QGVAR(speak), ["local", parseSimpleArray _data]] call CBA_fnc_globalEvent;
     };
     if (_func == "speak:openai") then {
-        [QGVAR(speak), ["openai", _data]] call CBA_fnc_globalEvent;
+        [QGVAR(speak), ["openai", parseSimpleArray _data]] call CBA_fnc_globalEvent;
     };
 }];

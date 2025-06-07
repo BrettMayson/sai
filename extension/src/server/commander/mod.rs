@@ -60,10 +60,6 @@ impl Commander {
         &self.callsign
     }
 
-    pub fn set_callsign(&mut self, callsign: String) {
-        self.callsign = callsign;
-    }
-
     #[allow(clippy::too_many_lines)]
     pub async fn input(&self, ctx: &Context, message: String) -> Result<Option<String>, String> {
         let mut inner = self.inner.lock().await;
@@ -177,7 +173,7 @@ pub struct CommanderInner {
     pub artillery: HashMap<String, Artillery>,
 }
 
-pub async fn speak(ctx: &Context, text: String) -> Result<(), String> {
+pub async fn speak(ctx: &Context, callsign: String, text: String) -> Result<(), String> {
     let id = Uuid::new_v4();
     let mut client = match openai_client(ctx) {
         Ok(client) => client,
@@ -207,7 +203,7 @@ pub async fn speak(ctx: &Context, text: String) -> Result<(), String> {
         match result {
             Ok(result) if result.result => {
                 println!("Audio file saved: {id}");
-                if let Err(e) = ctx.callback_data("sai", "speak:openai", id) {
+                if let Err(e) = ctx.callback_data("sai", "speak:openai", (callsign, id)) {
                     eprintln!("Error sending callback data: {e}");
                     return Err("Error sending callback data".to_string());
                 }

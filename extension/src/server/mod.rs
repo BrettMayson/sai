@@ -71,7 +71,7 @@ fn handle_spoke(ctx: Context, callsign: String, text: String, speak: bool) -> Re
                 return;
             };
             println!("Will speak: {response:?}");
-            match commander::speak(&ctx, response).await {
+            match commander::speak(&ctx, callsign, response).await {
                 Ok(()) => {
                     println!("Ready for clients to speak");
                 }
