@@ -186,7 +186,7 @@ pub async fn speak(ctx: &Context, text: String) -> Result<(), String> {
             return Err("Error creating client".to_string());
         }
     };
-    if true {
+    if cfg!(feature = "local") {
         if let Err(e) = ctx.callback_data("sai", "speak:local", text) {
             eprintln!("Error sending callback data: {e}");
             return Err("Error sending callback data".to_string());

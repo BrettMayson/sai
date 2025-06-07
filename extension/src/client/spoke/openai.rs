@@ -29,6 +29,12 @@ pub fn spoke(ctx: Context, path: PathBuf, callsign: String) {
             eprintln!("HOST not found in settings");
             return;
         };
+        let host = host.as_str().unwrap().to_string();
+        if !host.starts_with("http://") && !host.starts_with("https://") {
+            eprintln!("Invalid host URL: {host}");
+            return;
+        }
+        println!("Sending WAV file to {host}/spoke");
         let response = match reqwest::Client::new()
             .post(format!("{host}/spoke"))
             .multipart(

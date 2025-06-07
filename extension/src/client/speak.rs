@@ -59,6 +59,12 @@ async fn openai(settings: Settings, id: Uuid) {
         eprintln!("Error: HOST not found in settings");
         return;
     };
+    let host = host.as_str().unwrap().to_string();
+    if !host.starts_with("http://") && !host.starts_with("https://") {
+        eprintln!("Error: Invalid host URL: {host}");
+        return;
+    }
+    println!("Using host: {host}");
     // Make a GET request to the /speak/{id} endpoint
     let response = match client
         .get(format!("{host}/speak/{id}"))
