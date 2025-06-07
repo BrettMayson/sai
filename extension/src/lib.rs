@@ -3,17 +3,21 @@ use std::sync::{Arc, OnceLock};
 use arma_rs::{Context, ContextState, Extension, arma};
 use tokio::runtime::Runtime;
 
+#[cfg(feature = "client")]
 mod client;
 mod server;
 mod settings;
 
 #[arma]
 fn init() -> Extension {
-    let ext = Extension::build()
-        .group("client", client::group())
+    let mut ext = Extension::build()
         .group("server", server::group())
-        .group("settings", settings::group())
-        .finish();
+        .group("settings", settings::group());
+    #[cfg(feature = "client")]
+    {
+        ext = ext.group("client", client::group());
+    }
+    let ext = ext.finish();
 
     let ctx = ext.context();
     let ctx_tokio = ext.context();
