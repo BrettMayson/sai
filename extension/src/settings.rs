@@ -57,5 +57,8 @@ fn cmd_get(ctx: Context, key: String) -> Result<DirectReturn, String> {
         ctx.global().set(Settings::default());
         ctx.global().get::<Settings>().unwrap()
     });
-    settings.get(&key).map_or_else(|| Err(format!("Key {key} not found")), |value| Ok(Value::direct(value)))
+    settings.get(&key).map_or_else(
+        || Err(format!("Key {key} not found")),
+        |value| Ok(Value::direct(value)),
+    )
 }

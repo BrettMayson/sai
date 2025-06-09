@@ -5,8 +5,7 @@ params ["_callsign", "_unit"];
 private _id = netId _unit;
 private _name = getText (configOf _unit >> "DisplayName");
 
-// TODO
-private _isVLS = false;
+private _isVLS = _unit call zen_common_fnc_isVLS;
 
 private _cfgMagazines = configFile >> "CfgMagazines";
 private _rounds = [];

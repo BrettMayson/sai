@@ -4,13 +4,17 @@ use arma_rs::{Context, ContextState};
 use reqwest::multipart::{Form, Part};
 use tokio::{io::AsyncReadExt, runtime::Runtime};
 
-use crate::{settings::Settings, TokioContext};
+use crate::{TokioContext, settings::Settings};
 
 pub fn spoke(ctx: Context, path: PathBuf, callsign: String) {
-    let settings = ctx.global().get::<Settings>().unwrap_or_else(|| {
-        ctx.global().set(Settings::default());
-        ctx.global().get::<Settings>().unwrap()
-    }).clone();
+    let settings = ctx
+        .global()
+        .get::<Settings>()
+        .unwrap_or_else(|| {
+            ctx.global().set(Settings::default());
+            ctx.global().get::<Settings>().unwrap()
+        })
+        .clone();
     ctx.global().get::<Runtime>().unwrap().spawn(async move {
         let Ok(mut file) = tokio::fs::File::open(&path).await else {
             eprintln!("Error opening file");
@@ -60,9 +64,10 @@ pub fn spoke(ctx: Context, path: PathBuf, callsign: String) {
             println!("Successfully sent WAV file");
             let response = response.text().await.expect("Failed to read response");
             println!("Response: {response}");
-            if let Err(e) = TokioContext::get()
-                .unwrap()
-                .callback_data("sai", "spoke", (callsign, response))
+            if let Err(e) =
+                TokioContext::get()
+                    .unwrap()
+                    .callback_data("sai", "spoke", (callsign, response))
             {
                 eprintln!("Error sending callback data: {e}");
             }

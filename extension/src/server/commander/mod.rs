@@ -40,6 +40,13 @@ impl CommanderPool {
             .or_insert_with(|| Commander::new(callsign.to_string()))
             .clone()
     }
+
+    pub fn reset() {
+        static POOL: LazyLock<CommanderPool> = LazyLock::new(|| CommanderPool {
+            commanders: Arc::new(DashMap::new()),
+        });
+        POOL.commanders.clear();
+    }
 }
 
 #[derive(Default, Clone)]
@@ -82,9 +89,11 @@ Your job is to respond to requests from field units, providing support and infor
 When responding be as consise as possible, use military lingo, short responses save lifes, don't waste time with generic advice.
 The field team does not know what support is avilable, offer them the available options or pick the most logical.
 The shorter the response the better. Do not over explain or ask unnecessary questions.
+Give available rounds in this format, keeping it short and to the point: Shoelf has 1x HE, 2x Laser Guided
 If the other party ends the conversation (having ended with out, for example), respond with 'no message', and no other text.
-After using a support option, refresh the available options before the next use.
-Do at most 1 destructive action at a time, confirm details with the user.", self.callsign())),
+Upon every request, before asking for confirmation, check the available artillery and ETA using the tools to ensure you have the latest information and the order is possible.
+Do not track the state of the rounds yourself, as other parties may change the state of the rounds.
+Do at most 1 destructive action at a time, always confirm details with the user.", self.callsign())),
                             name: None,
                             tool_calls: None,
                             tool_call_id: None,
@@ -93,8 +102,9 @@ Do at most 1 destructive action at a time, confirm details with the user.", self
                 history.append(&mut inner.history.clone());
                 history
             }).tools(vec![
-                artillery::tool_fire_schema(),
-                artillery::tool_available_artillery_schema(),
+                artillery::tool_artillery_fire_schema(),
+                artillery::tool_artillery_available_schema(),
+                artillery::tool_artillery_eta_schema(),
             ]).tool_choice(ToolChoiceType::Auto);
             let mut client = match openai_client(ctx) {
                 Ok(client) => client,
@@ -144,10 +154,11 @@ Do at most 1 destructive action at a time, confirm details with the user.", self
                         println!("Tool call: {name:?}");
                         let arguments = tool_call.function.arguments.clone().unwrap();
                         let response = match name.as_str() {
-                            "artillery_fire" => self.tool_fire(arguments),
+                            "artillery_fire" => Self::tool_artillery_fire(arguments),
                             "artillery_available" => {
-                                self.tool_available_artillery(&inner, arguments)
+                                Self::tool_artillery_available(&inner, arguments)
                             }
+                            "artillery_eta" => Self::tool_artillery_eta(arguments).await,
                             _ => {
                                 println!("Unknown tool call: {name:?}");
                                 "unknown tool call".to_string()
@@ -197,7 +208,7 @@ pub async fn speak(ctx: &Context, callsign: String, text: String) -> Result<(), 
                 .display()
                 .to_string(),
         )
-        .instructions("Speak in a quick direct tone, you're a military officer".to_string())
+        .instructions("Speak in a quick direct tone, you're a military support unit".to_string())
         .speed(1.4);
         let result = client.audio_speech(req).await;
         match result {

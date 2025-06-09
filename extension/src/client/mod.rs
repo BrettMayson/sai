@@ -68,10 +68,7 @@ fn cmd_start(ctx: Context) {
             eprintln!("Error recording: {e}");
         }
     });
-    let state = CurrentRecordingInner {
-        path,
-        sender: tx,
-    };
+    let state = CurrentRecordingInner { path, sender: tx };
     current.set(state);
 }
 

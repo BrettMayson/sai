@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use arma_rs::{Context, ContextState, FromArma, Group};
+use arma_rs::{Context, ContextState, FromArma, Group, Value};
 use openai_api_rs::v1::{
     chat_completion::{Tool, ToolType},
     types::{Function, FunctionParameters, JSONSchemaDefine, JSONSchemaType},
@@ -8,7 +8,10 @@ use openai_api_rs::v1::{
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Runtime;
 
-use crate::{server::commander::CommanderPool, TokioContext};
+use crate::{
+    TokioContext,
+    server::{commander::CommanderPool, response::ResponseManager},
+};
 
 use super::{Commander, CommanderInner};
 
@@ -56,7 +59,7 @@ impl Commander {
         );
     }
 
-    pub fn tool_fire(&self, arguments: String) -> String {
+    pub fn tool_artillery_fire(arguments: String) -> String {
         #[derive(Deserialize)]
         struct FireOrder {
             target: String,
@@ -65,60 +68,102 @@ impl Commander {
             unit: String,
             spread: Option<u32>,
         }
-        println!("Tool fire called with arguments: {:?}", arguments);
+        println!("Tool fire called with arguments: {arguments:?}");
         let fire_order: FireOrder = serde_json::from_str(&arguments).unwrap();
         if let Err(e) = TokioContext::get().unwrap().context.callback_data(
             "sai",
             "artillery:fire",
             (
-                fire_order
-                    .target
-                    .replace(" ", "")
-                    .replace(":", "")
-                    .replace("-", ""),
+                fire_order.target.replace([' ', ':', '-'], ""),
                 fire_order.round,
                 fire_order.quantity,
                 fire_order.unit,
                 fire_order.spread.unwrap_or(0),
             ),
         ) {
-            eprintln!("Error sending callback data: {}", e);
+            eprintln!("Error sending callback data: {e}");
             return "Error requesting artillery fire".to_string();
         }
         println!("Callback data sent");
-        // TODO get the ETA from arma
         "{\"success\": true}".to_string()
     }
 
-    pub fn tool_available_artillery(
-        &self,
-        inner: &CommanderInner,
-        arguments: String,
-    ) -> String {
-        println!(
-            "Tool available artillery called with arguments: {:?}",
-            arguments
-        );
+    pub fn tool_artillery_available(inner: &CommanderInner, arguments: String) -> String {
+        println!("Tool available artillery called with arguments: {arguments:?}");
         let resp = serde_json::to_string(&inner.artillery).unwrap_or_else(|_| "[]".to_string());
-        println!("Available artillery: {:?}", resp);
+        println!("Available artillery: {resp:?}");
         resp
+    }
+
+    pub async fn tool_artillery_eta(arguments: String) -> String {
+        #[derive(Deserialize)]
+        struct EtaOrder {
+            target: String,
+            round: String,
+            unit: String,
+        }
+        println!("Tool artillery ETA called with arguments: {arguments:?}");
+        let fire_order: EtaOrder = serde_json::from_str(&arguments).unwrap();
+        let (id, mut recv) = ResponseManager::create();
+        if let Err(e) = TokioContext::get().unwrap().context.callback_data(
+            "sai",
+            "artillery:eta",
+            (
+                id,
+                fire_order.target.replace([' ', ':', '-'], ""),
+                fire_order.round,
+                fire_order.unit,
+            ),
+        ) {
+            eprintln!("Error sending callback data: {e}");
+            return "Error requesting artillery fire".to_string();
+        }
+        match recv.recv().await {
+            Some(Value::Number(eta)) => {
+                println!("Received ETA: {eta}");
+                format!("{{\"eta\": {eta}}}")
+            }
+            Some(value) => {
+                eprintln!("Received invalid response for artillery ETA: {value:?}");
+                "{\"error\": \"Invalid response\"}".to_string()
+            }
+            None => {
+                eprintln!("No response received for artillery ETA");
+                "{\"error\": \"No response received\"}".to_string()
+            }
+        }
     }
 }
 
 pub fn group() -> Group {
-    Group::new().command("register", cmd_register)
+    Group::new()
+        .command("register", cmd_register)
+        .command("remove", cmd_remove)
 }
 
-fn cmd_register(ctx: Context, id: String, callsign: String, name: String, rounds: Vec<Round>) -> Result<(), String> {
-    println!("Registering artillery: {} - {}", id, name);
-    println!("Rounds: {:?}", rounds);
+fn cmd_register(ctx: Context, id: String, callsign: String, name: String, rounds: Vec<Round>) {
+    println!("Registering artillery: {id} - {name}");
+    println!("Rounds: {rounds:?}");
     ctx.global().get::<Runtime>().unwrap().block_on(async move {
-        CommanderPool::get(&callsign).set_artillery(id, name, rounds).await;
+        CommanderPool::get(&callsign)
+            .set_artillery(id, name, rounds)
+            .await;
     });
-    Ok(())
 }
 
-pub fn tool_fire_schema() -> Tool {
+fn cmd_remove(ctx: Context, id: String, callsign: String) {
+    println!("Removing artillery: {id}");
+    ctx.global().get::<Runtime>().unwrap().block_on(async move {
+        let commander = CommanderPool::get(&callsign);
+        commander.inner.lock().await.artillery.remove(&id);
+        println!(
+            "Artillery removed: {:?}",
+            commander.inner.lock().await.artillery
+        );
+    });
+}
+
+pub fn tool_artillery_fire_schema() -> Tool {
     Tool {
         r#type: ToolType::Function,
         function: Function {
@@ -130,12 +175,12 @@ pub fn tool_fire_schema() -> Tool {
                     Some(HashMap::from([
                         ("target".to_string(), Box::new(JSONSchemaDefine {
                             schema_type: Some(JSONSchemaType::String),
-                            description: Some("The target to fire at, can be a grid reference in XXXYYY format".to_string()),
+                            description: Some("The target to fire at, can be a grid reference in XY format. 6,8,10 digit grids are supported".to_string()),
                             ..Default::default()
                         })),
                         ("round".to_string(), Box::new(JSONSchemaDefine {
                             schema_type: Some(JSONSchemaType::String),
-                            description: Some("The classname of round to fire, must be one of the available rounds for the artillery unit".to_string()),
+                            description: Some("The classname of round to fire, must be one of the available rounds for the artillery unit, can not contain spaces".to_string()),
                             ..Default::default()
                         })),
                         ("quantity".to_string(), Box::new(JSONSchemaDefine {
@@ -165,7 +210,7 @@ pub fn tool_fire_schema() -> Tool {
     }
 }
 
-pub fn tool_available_artillery_schema() -> Tool {
+pub fn tool_artillery_available_schema() -> Tool {
     Tool {
         r#type: ToolType::Function,
         function: Function {
@@ -180,6 +225,42 @@ pub fn tool_available_artillery_schema() -> Tool {
                 required: None,
             },
         },
+    }
+}
+
+pub fn tool_artillery_eta_schema() -> Tool {
+    Tool {
+        r#type: ToolType::Function,
+        function: Function {
+            name: "artillery_eta".to_string(),
+            description: Some("Get the estimated time of arrival for artillery strikes. Returns -1 if the target can't be hit.".to_string()),
+            parameters: FunctionParameters {
+                schema_type: JSONSchemaType::Object,
+                properties:
+                    Some(HashMap::from([
+                        ("target".to_string(), Box::new(JSONSchemaDefine {
+                            schema_type: Some(JSONSchemaType::String),
+                            description: Some("The target to fire at, can be a grid reference in XY format. 6,8,10 digit grids are supported".to_string()),
+                            ..Default::default()
+                        })),
+                        ("round".to_string(), Box::new(JSONSchemaDefine {
+                            schema_type: Some(JSONSchemaType::String),
+                            description: Some("The classname of round to fire, must be one of the available rounds for the artillery unit, can not contain spaces".to_string()),
+                            ..Default::default()
+                        })),
+                        ("unit".to_string(), Box::new(JSONSchemaDefine {
+                            schema_type: Some(JSONSchemaType::String),
+                            description: Some("The unit that should fire, must be in format x:y".to_string()),
+                            ..Default::default()
+                        })),
+                    ])),
+                required: Some(vec![
+                    "target".to_string(),
+                    "round".to_string(),
+                    "unit".to_string(),
+                ]),
+            }
+        }
     }
 }
 
@@ -207,8 +288,8 @@ mod test {
             0,
         );
         assert_eq!(code, 0);
-        println!("Code: {:?}", code);
-        println!("Ret: {:?}", ret);
+        println!("Code: {code:?}");
+        println!("Ret: {ret:?}");
         let tokio_context = ext.context();
         ext.context()
             .global()

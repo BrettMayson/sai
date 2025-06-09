@@ -2,7 +2,7 @@ use arma_rs::{Context, ContextState, Group};
 use reqwest::Client;
 use rodio::{Decoder, OutputStream, Sink};
 use std::io::Cursor;
-use std::sync::{Mutex, mpsc};
+use std::sync::mpsc;
 use std::time::Duration;
 use tokio::runtime::Runtime;
 use uuid::Uuid;
@@ -10,8 +10,7 @@ use uuid::Uuid;
 use crate::settings::Settings;
 
 pub fn group() -> Group {
-    let mut group = Group::new()
-        .command("openai", cmd_openai);
+    let mut group = Group::new().command("openai", cmd_openai);
     #[cfg(feature = "local")]
     {
         group = group.command("local", cmd_local);
@@ -39,10 +38,14 @@ pub fn cmd_local(ctx: Context, data: String) -> Result<(), String> {
 }
 
 pub fn cmd_openai(ctx: Context, data: String) {
-    let settings = ctx.global().get::<Settings>().unwrap_or_else(|| {
-        ctx.global().set(Settings::default());
-        ctx.global().get::<Settings>().unwrap()
-    }).clone();
+    let settings = ctx
+        .global()
+        .get::<Settings>()
+        .unwrap_or_else(|| {
+            ctx.global().set(Settings::default());
+            ctx.global().get::<Settings>().unwrap()
+        })
+        .clone();
     ctx.global()
         .get::<Runtime>()
         .unwrap()
@@ -66,11 +69,7 @@ async fn openai(settings: Settings, id: Uuid) {
     }
     println!("Using host: {host}");
     // Make a GET request to the /speak/{id} endpoint
-    let response = match client
-        .get(format!("{host}/speak/{id}"))
-        .send()
-        .await
-    {
+    let response = match client.get(format!("{host}/speak/{id}")).send().await {
         Ok(response) => response,
         Err(e) => {
             eprintln!("Error: Failed to send request: {e}");

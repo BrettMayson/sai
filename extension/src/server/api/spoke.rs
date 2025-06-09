@@ -20,7 +20,8 @@ pub async fn handler(mut multipart: Multipart) -> impl IntoResponse {
             let data = field.bytes().await.unwrap_or_default();
             if !data.is_empty() {
                 let req =
-                    AudioTranscriptionRequest::new_bytes(data.to_vec(), WHISPER_1.to_string());
+                    AudioTranscriptionRequest::new_bytes(data.to_vec(), WHISPER_1.to_string())
+                        .language("en".to_string());
                 let req_json = req.clone().response_format("json".to_string());
                 let mut client = match openai_client(&ctx) {
                     Ok(client) => client,
