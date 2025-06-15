@@ -154,9 +154,9 @@ Do at most 1 destructive action at a time, always confirm details with the user.
                         println!("Tool call: {name:?}");
                         let arguments = tool_call.function.arguments.clone().unwrap();
                         let response = match name.as_str() {
-                            "artillery_fire" => Self::tool_artillery_fire(arguments),
+                            "artillery_fire" => Self::tool_artillery_fire(&arguments),
                             "artillery_available" => {
-                                Self::tool_artillery_available(&inner, arguments)
+                                Self::tool_artillery_available(&inner, &arguments)
                             }
                             "artillery_eta" => Self::tool_artillery_eta(arguments).await,
                             _ => {
@@ -193,40 +193,33 @@ pub async fn speak(ctx: &Context, callsign: String, text: String) -> Result<(), 
             return Err("Error creating client".to_string());
         }
     };
-    if cfg!(feature = "local") {
-        if let Err(e) = ctx.callback_data("sai", "speak:local", text) {
-            eprintln!("Error sending callback data: {e}");
-            return Err("Error sending callback data".to_string());
+    let req = AudioSpeechRequest::new(
+        "gpt-4o-mini-tts".to_string(),
+        text,
+        "ash".to_string(),
+        temp_dir()
+            .join(format!("sai_{id}.mp3"))
+            .display()
+            .to_string(),
+    )
+    .instructions("Speak in a quick direct tone, you're a military support unit".to_string())
+    .speed(1.4);
+    let result = client.audio_speech(req).await;
+    match result {
+        Ok(result) if result.result => {
+            println!("Audio file saved: {id}");
+            if let Err(e) = ctx.callback_data("sai", "speak", (callsign, id)) {
+                eprintln!("Error sending callback data: {e}");
+                return Err("Error sending callback data".to_string());
+            }
         }
-    } else {
-        let req = AudioSpeechRequest::new(
-            "gpt-4o-mini-tts".to_string(),
-            text,
-            "ash".to_string(),
-            temp_dir()
-                .join(format!("sai_{id}.mp3"))
-                .display()
-                .to_string(),
-        )
-        .instructions("Speak in a quick direct tone, you're a military support unit".to_string())
-        .speed(1.4);
-        let result = client.audio_speech(req).await;
-        match result {
-            Ok(result) if result.result => {
-                println!("Audio file saved: {id}");
-                if let Err(e) = ctx.callback_data("sai", "speak:openai", (callsign, id)) {
-                    eprintln!("Error sending callback data: {e}");
-                    return Err("Error sending callback data".to_string());
-                }
-            }
-            Ok(_) => {
-                eprintln!("Error processing audio, result: {result:?}");
-                return Err("Error processing audio file".to_string());
-            }
-            Err(err) => {
-                eprintln!("Error processing audio: {err}");
-                return Err("Error processing audio file".to_string());
-            }
+        Ok(_) => {
+            eprintln!("Error processing audio, result: {result:?}");
+            return Err("Error processing audio file".to_string());
+        }
+        Err(err) => {
+            eprintln!("Error processing audio: {err}");
+            return Err("Error processing audio file".to_string());
         }
     }
     Ok(())

@@ -41,6 +41,7 @@ impl Settings {
     }
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn cmd_set(ctx: Context, key: String, value: Value) {
     let settings = ctx.global().get::<Settings>().unwrap_or_else(|| {
         ctx.global().set(Settings::default());
@@ -49,6 +50,7 @@ fn cmd_set(ctx: Context, key: String, value: Value) {
     settings.set(key, value);
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn cmd_get(ctx: Context, key: String) -> Result<DirectReturn, String> {
     if WRITE_ONLY.contains(&key.as_str()) {
         return Err(format!("Key {key} is write-only"));

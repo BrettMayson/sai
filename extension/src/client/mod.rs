@@ -14,11 +14,13 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 
+use crate::client::speak::cmd_speak;
+
 pub fn group() -> Group {
     Group::new()
         .command("start", cmd_start)
         .command("stop", cmd_stop)
-        .group("speak", speak::group())
+        .command("speak", cmd_speak)
 }
 
 struct CurrentRecording {
@@ -54,6 +56,7 @@ struct CurrentRecordingInner {
     sender: std::sync::mpsc::Sender<()>,
 }
 
+#[allow(clippy::needless_pass_by_value)]
 /// The user has started speaking
 fn cmd_start(ctx: Context) {
     let current = ctx.group().get::<CurrentRecording>().unwrap_or_else(|| {
@@ -64,7 +67,7 @@ fn cmd_start(ctx: Context) {
     let path = std::env::temp_dir().join("sai_recording.wav");
     let path2 = path.clone();
     std::thread::spawn(move || {
-        if let Err(e) = record_thread(rx, path2.as_path()) {
+        if let Err(e) = record_thread(&rx, path2.as_path()) {
             eprintln!("Error recording: {e}");
         }
     });
@@ -82,18 +85,12 @@ fn cmd_stop(ctx: Context, callsign: String) -> Result<(), String> {
     let path = current.path;
     println!("Stopping recording at {}", path.display());
 
-    // todo setting for local stt
-    if cfg!(feature = "local") {
-        #[cfg(feature = "local")]
-        spoke::local::spoke(ctx, path, callsign);
-    } else {
-        spoke::openai::spoke(ctx, path, callsign);
-    }
+    spoke::spoke(ctx, path, callsign);
 
     Ok(())
 }
 
-fn record_thread(rx: std::sync::mpsc::Receiver<()>, path: &Path) -> Result<(), String> {
+fn record_thread(rx: &std::sync::mpsc::Receiver<()>, path: &Path) -> Result<(), String> {
     let host = cpal::default_host();
     let device = host
         .default_input_device()
@@ -169,6 +166,7 @@ fn sample_format(format: cpal::SampleFormat) -> hound::SampleFormat {
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
 fn wav_spec_from_config(config: &cpal::SupportedStreamConfig) -> hound::WavSpec {
     hound::WavSpec {
         channels: config.channels() as _,

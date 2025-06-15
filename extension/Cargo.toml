@@ -21,8 +21,6 @@ cpal = {version ="0.15.3", optional = true }
 hound = {version ="3.5.1", optional = true }
 rodio = {version ="0.20.1", optional = true }
 rubato = {version ="0.16.2", optional = true }
-tts = { version = "0.26.3", optional = true }
-whisper-rs = {version = "0.14.2", optional = true }
 
 # api
 axum = { version = "0.8.3", features = ["json", "multipart"] }
@@ -31,7 +29,6 @@ reqwest = { version = "0.12.15", features = ["json"] }
 [features]
 default = ["client"]
 client = ["cpal", "hound", "rodio", "rubato"]
-local = ["whisper-rs", "tts"]
 
 [lints.clippy]
 all = { level = "deny", priority = -1 }

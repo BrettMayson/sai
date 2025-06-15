@@ -23,17 +23,30 @@ GVAR(radio) = "";
 }] call CBA_fnc_addEventHandler;
 
 [QGVAR(speak), {
-    params ["_func", "_data"];
+    params ["_data"];
     private _freq = (keys GVAR(commanders)) select ((keys GVAR(commanders)) findIf {
         private _x = GVAR(commanders) get _x;
         _x isEqualTo _data#0
     });
+    private _pan = 0.0;
+    private _volume = 1.0;
     if (([] call acre_api_fnc_getCurrentRadioList) findIf {
         private _channel = [_x] call acre_api_fnc_getRadioChannel;
         private _f = [[_x] call acre_api_fnc_getBaseRadio, "default", _channel, "frequencyRX"] call acre_api_fnc_getPresetChannelField;
-        _f isEqualTo _freq
+        private _match = _f isEqualTo _freq;
+        if (_match) then {
+            private _spatial = [_x] call acre_api_fnc_getRadioSpatial;
+            if (_spatial == "LEFT") then {
+                _pan = -1.0;
+            };
+            if (_spatial == "RIGHT") then {
+                _pan = 1.0;
+            };
+            _volume = [_x] call acre_api_fnc_getRadioVolume;
+        };
+        _match
     } == -1) exitWith {};
-    ("sai" callExtension [format["client:speak:%1", _func], [_data#1]]) params ["_ret", "_code"];
+    ("sai" callExtension ["client:speak", [_data#1, _pan, _volume]]) params ["_ret", "_code"];
 }] call CBA_fnc_addEventHandler;
 
 addMissionEventHandler ["ExtensionCallback", {

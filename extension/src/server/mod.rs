@@ -17,7 +17,7 @@ pub fn group() -> Group {
         .command("start", cmd_start)
 }
 
-// start and axum api server on port 8521
+#[allow(clippy::needless_pass_by_value)]
 fn cmd_start(ctx: Context) {
     static STARTED: std::sync::Once = std::sync::Once::new();
     STARTED.call_once(|| {
@@ -54,6 +54,7 @@ fn cmd_manual(ctx: Context, callsign: String, text: String) -> Result<(), String
     handle_spoke(ctx, callsign, text, false)
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn handle_spoke(ctx: Context, callsign: String, text: String, speak: bool) -> Result<(), String> {
     println!("Manual command called");
     let Some(tokio) = ctx.global().get::<Runtime>() else {

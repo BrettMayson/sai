@@ -1,6 +1,6 @@
-use arma_rs::{Context, ContextState, Group};
+use arma_rs::{Context, ContextState};
 use reqwest::Client;
-use rodio::{Decoder, OutputStream, Sink};
+use rodio::{Decoder, OutputStream, Sink, Source};
 use std::io::Cursor;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -9,35 +9,8 @@ use uuid::Uuid;
 
 use crate::settings::Settings;
 
-pub fn group() -> Group {
-    let mut group = Group::new().command("openai", cmd_openai);
-    #[cfg(feature = "local")]
-    {
-        group = group.command("local", cmd_local);
-    }
-    group
-}
-
-#[cfg(feature = "local")]
-pub fn cmd_local(ctx: Context, data: String) -> Result<(), String> {
-    use tts::Tts;
-    println!("speaking locally: {}", data);
-    std::thread::spawn(move || {
-        let tts = ctx.global().get::<Mutex<Tts>>().unwrap_or_else(|| {
-            ctx.global()
-                .set::<Mutex<Tts>>(Mutex::new(Tts::default().unwrap()));
-            ctx.global().get::<Mutex<Tts>>().unwrap()
-        });
-        if let Err(e) = tts.lock().unwrap().speak(data, false) {
-            eprintln!("Error: Failed to speak: {}", e);
-        } else {
-            println!("Spoken successfully");
-        };
-    });
-    Ok(())
-}
-
-pub fn cmd_openai(ctx: Context, data: String) {
+#[allow(clippy::needless_pass_by_value)]
+pub fn cmd_speak(ctx: Context, data: String, pan: f32, volume: f32) {
     let settings = ctx
         .global()
         .get::<Settings>()
@@ -46,13 +19,15 @@ pub fn cmd_openai(ctx: Context, data: String) {
             ctx.global().get::<Settings>().unwrap()
         })
         .clone();
-    ctx.global()
-        .get::<Runtime>()
-        .unwrap()
-        .spawn(openai(settings, Uuid::parse_str(&data).unwrap()));
+    ctx.global().get::<Runtime>().unwrap().spawn(openai(
+        settings,
+        Uuid::parse_str(&data).unwrap(),
+        pan,
+        volume,
+    ));
 }
 
-async fn openai(settings: Settings, id: Uuid) {
+async fn openai(settings: Settings, id: Uuid, pan: f32, volume: f32) {
     println!("Requesting audio for ID: {id}");
     // Create a new HTTP client
     let client = Client::new();
@@ -93,7 +68,7 @@ async fn openai(settings: Settings, id: Uuid) {
     };
 
     // Play the MP3 file
-    match play_audio_with_rodio(mp3_data.to_vec()) {
+    match play_audio_with_rodio(mp3_data.to_vec(), pan, volume) {
         Ok(()) => {
             println!("Played audio successfully");
         }
@@ -103,7 +78,7 @@ async fn openai(settings: Settings, id: Uuid) {
     }
 }
 
-fn play_audio_with_rodio(data: Vec<u8>) -> Result<(), String> {
+fn play_audio_with_rodio(data: Vec<u8>, pan: f32, volume: f32) -> Result<(), String> {
     // Create cursor from the MP3 data
     let cursor = Cursor::new(data);
 
@@ -119,7 +94,9 @@ fn play_audio_with_rodio(data: Vec<u8>) -> Result<(), String> {
     let source = Decoder::new(cursor).map_err(|e| format!("Failed to decode audio data: {e}"))?;
 
     // Add the audio to the sink
-    sink.append(source);
+    sink.append(pan_volume(source, pan, volume));
+
+    println!("Playing audio with pan: {pan}, volume: {volume}");
 
     // Start playback
     sink.play();
@@ -148,4 +125,96 @@ fn play_audio_with_rodio(data: Vec<u8>) -> Result<(), String> {
     }
 
     // stream is dropped here, which automatically closes the audio device
+}
+
+pub struct PanVolumeSource<S>
+where
+    S: Source<Item = i16>,
+{
+    input: S,
+    pan: f32,    // -1.0 (left) to 1.0 (right)
+    volume: f32, // 1.0 = normal
+    left: bool,
+    mono_repeat: i16,
+}
+
+impl<S> Iterator for PanVolumeSource<S>
+where
+    S: Source<Item = i16>,
+{
+    type Item = i16;
+
+    #[allow(clippy::cast_possible_truncation)]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.input.channels() == 1 {
+            if self.left {
+                let sample = self.input.next()?;
+                // Apply left pan and volume
+                self.left = false;
+                self.mono_repeat = sample;
+                return Some((sample as f32 * (1.0 - self.pan) * self.volume) as i16);
+            }
+            // Apply right pan and volume
+            self.left = true;
+            let sample = self.mono_repeat;
+            return Some((sample as f32 * (1.0 + self.pan) * self.volume) as i16);
+        }
+        let sample = self.input.next()?;
+        if self.left {
+            // Apply left pan and volume
+            self.left = false;
+            return Some((sample as f32 * (1.0 - self.pan) * self.volume) as i16);
+        }
+        // Apply right pan and volume
+        self.left = true;
+        Some((sample as f32 * (1.0 + self.pan) * self.volume) as i16)
+    }
+}
+
+impl<S> Source for PanVolumeSource<S>
+where
+    S: Source<Item = i16>,
+{
+    fn current_frame_len(&self) -> Option<usize> {
+        self.input.current_frame_len()
+    }
+    fn channels(&self) -> u16 {
+        2
+    }
+    fn sample_rate(&self) -> u32 {
+        self.input.sample_rate()
+    }
+    fn total_duration(&self) -> Option<Duration> {
+        self.input.total_duration()
+    }
+}
+
+/// Helper to wrap a source with pan and volume
+pub fn pan_volume<S>(source: S, pan: f32, volume: f32) -> PanVolumeSource<S>
+where
+    S: Source<Item = i16>,
+{
+    PanVolumeSource {
+        input: source,
+        pan,
+        volume,
+        left: true,
+        mono_repeat: 0,
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn test_pan_volume() {
+    // Decode "womp.mp3" into a source
+    let data = include_bytes!("../../../womp.mp3").to_vec();
+    play_audio_with_rodio(data, 1.0, 0.8).expect("Failed to play audio with pan and volume");
+}
+
+#[cfg(test)]
+#[test]
+fn test_pan_volume_mono() {
+    // Decode "mono.mp3" into a source
+    let data = include_bytes!("../../../mono.mp3").to_vec();
+    play_audio_with_rodio(data, 1.0, 0.8).expect("Failed to play audio with pan and volume");
 }

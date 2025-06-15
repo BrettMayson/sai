@@ -39,6 +39,7 @@ impl ResponseManager {
     }
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn cmd_response(ctx: Context, id: Uuid, data: Value) {
     ctx.global().get::<Runtime>().unwrap().spawn(async move {
         ResponseManager::send(&id, data).await;

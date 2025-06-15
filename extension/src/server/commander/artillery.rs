@@ -59,7 +59,7 @@ impl Commander {
         );
     }
 
-    pub fn tool_artillery_fire(arguments: String) -> String {
+    pub fn tool_artillery_fire(arguments: &str) -> String {
         #[derive(Deserialize)]
         struct FireOrder {
             target: String,
@@ -69,7 +69,7 @@ impl Commander {
             spread: Option<u32>,
         }
         println!("Tool fire called with arguments: {arguments:?}");
-        let fire_order: FireOrder = serde_json::from_str(&arguments).unwrap();
+        let fire_order: FireOrder = serde_json::from_str(arguments).unwrap();
         if let Err(e) = TokioContext::get().unwrap().context.callback_data(
             "sai",
             "artillery:fire",
@@ -88,7 +88,7 @@ impl Commander {
         "{\"success\": true}".to_string()
     }
 
-    pub fn tool_artillery_available(inner: &CommanderInner, arguments: String) -> String {
+    pub fn tool_artillery_available(inner: &CommanderInner, arguments: &str) -> String {
         println!("Tool available artillery called with arguments: {arguments:?}");
         let resp = serde_json::to_string(&inner.artillery).unwrap_or_else(|_| "[]".to_string());
         println!("Available artillery: {resp:?}");
@@ -141,6 +141,7 @@ pub fn group() -> Group {
         .command("remove", cmd_remove)
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn cmd_register(ctx: Context, id: String, callsign: String, name: String, rounds: Vec<Round>) {
     println!("Registering artillery: {id} - {name}");
     println!("Rounds: {rounds:?}");
@@ -151,6 +152,7 @@ fn cmd_register(ctx: Context, id: String, callsign: String, name: String, rounds
     });
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn cmd_remove(ctx: Context, id: String, callsign: String) {
     println!("Removing artillery: {id}");
     ctx.global().get::<Runtime>().unwrap().block_on(async move {
@@ -278,6 +280,7 @@ mod test {
             "server:commander:artillery:register",
             Some(vec![
                 "\"1:1\"".to_string(),
+                "\"hammer\"".to_string(),
                 "\"Seara\"".to_string(),
                 "[[\"he_177\",\"175mm HE\",12]]".to_string(),
             ]),
